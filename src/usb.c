@@ -24,6 +24,8 @@
 #define USB_PWREN_bm		PIN1_bm
 #define USB_PWREN_isActive	!(PORTR_IN & USB_PWREN_bm)
 
+#define MAGIC_BYTE			0xAA
+
 DECLARE_BUFFER(UsbTransmit,unsigned char,USB_TRANSMIT_BUFFER_LENGTH)
 
 
@@ -68,10 +70,10 @@ void usb_process_byte()
 		// Daten ausgeben
 		PORTA_DIR = 0xFF;						// Port A als Ausgabe definieren (USB DATA)
 		PORTA_OUT = BUFFER_READ(UsbTransmit);	// Daten aktivieren
-		
+
 		USB_WR_activate;						// WR aktivieren
 		USB_WR_deactivate;						// WR deaktivieren
-		
+
 		PORTA_OUT = 0x00;						// Port A löschen
 		PORTA_DIR = 0x00;						// Port A als Eingabe definieren
 
@@ -89,18 +91,19 @@ void usb_send_packet(packet_type_t type,  uint8_t* payload, uint8_t payload_leng
 {
 	if (BUFFER_FREEENTRIES(UsbTransmit) < payload_length + 4)
 		return;
-	
+
+	usb_send(MAGIC_BYTE);
 	usb_send((type & 0xE0) | (payload_length & 0x07));	//Sensor Type + Length
 
 	uint16_t timer = RTC_VALUE;
 
 	usb_send(timer >> 8);						//High Byte Timer
 	usb_send(timer);							//Low Byte Timer
-	
+
 	for (uint8_t i = 0; i < payload_length; i++)
 	{
 		usb_send(payload[i]);
-	}	
+	}
 }
 
 /**
@@ -108,6 +111,6 @@ void usb_send_packet(packet_type_t type,  uint8_t* payload, uint8_t payload_leng
  */
 void usb_send(uint8_t data)
 {
-	if (BUFFER_CANWRITE(UsbTransmit))	
+	if (BUFFER_CANWRITE(UsbTransmit))
 		BUFFER_WRITE(UsbTransmit,data);
 }
