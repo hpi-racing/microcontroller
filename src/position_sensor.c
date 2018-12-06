@@ -1,62 +1,88 @@
+#include <asf.h>
+#include <string.h>
+
 #include "position_sensor.h"
+#include "position_sensor_isr.h"
 #include "usb.h"
 #include "debug.h"
 
 
-int pin3_start;
-int pin3_lastprobe_stamp;
-int pin3_lastprobe_step;
-int pin3_inUse = 0;
-unsigned char portd_history;
+#define MAX_CONTROLLER_ID 7
+#define MAX_PERIOD_OFFSET 15
 
-void position_sensor_init (void)
+#define PERIOD_COUNT (POSITION_SENSOR_TIMESTAMP_COUNT)-1
+
+uint8_t check_port;
+
+void process_sensor(position_sensor_state_t *sensor, uint8_t sensor_id);
+inline uint8_t period_to_controller_id(uint16_t period);
+
+void position_sensor_init(void)
 {
-	// Interrupts für Flanken des Positionssensors
-	PORTD_INT0MASK |= PIN3_bm;
-	PORTD_INTCTRL |= PORT_INT0LVL_HI_gc;
-	PORTD_PIN3CTRL |= PORT_ISC_RISING_gc;
-
-	TCC1_CTRLA = TC_CLKSEL_DIV64_gc;
+	position_sensor_init_isr();
+	
+	check_port = 0;
 }
 
-
-ISR (PORTD_INT0_vect)
+void process_position_sensor_queue()
 {
-	DBG_OUT(PIN3_bm,0xff);
+	check_port = (check_port == POSITION_PORT_COUNT-1) ? 0 : check_port + 1;
 	
-	uint8_t changedPins = PORTD_IN ^ portd_history;
-	portd_history = PORTD_IN;
-
+	if (!(position_sensor_port_changed & _BV(check_port)))
+		return;
 	
-	//if (changedPins & PIN3_bm)
-	if (PORTD_IN & PIN3_bm)
+	position_sensor_port_changed &= ~_BV(check_port);
+	
+	for (uint8_t sensor_id=8*check_port; sensor_id<8*(check_port+1); sensor_id++)
 	{
-		DBG_OUT(PIN2_bm,0xff);
+		process_sensor(position_sensor_states + sensor_id, sensor_id);
+	}
+}
+
+void process_sensor(position_sensor_state_t *sensor, uint8_t sensor_id)
+{
+	if (sensor->read_access != READ_ACCESS_READY)
+		return;
+	
+	sensor->read_access = READ_ACCESS_IN_PROGRESS;
+	position_sensor_state_t copy = *sensor;
+	sensor->read_access = READ_ACCESS_NOT_READY;
+	
+	uint16_t period = copy.timestamps[0] - copy.timestamps[1];
+	uint8_t controller_id = period_to_controller_id(period);
+	
+	if (controller_id > MAX_CONTROLLER_ID)
+		return;
+	
+	for (int i=1; i<PERIOD_COUNT; i++)
+	{
+		period = copy.timestamps[i] - copy.timestamps[i+1];
+		uint8_t tmp_controller_id = period_to_controller_id(period);
 		
-		int currentStamp = TCC1_CNT;
-		int currentStep = currentStamp - pin3_lastprobe_stamp;
-		
-		if ((currentStep - pin3_lastprobe_step)<3 && (pin3_lastprobe_step - currentStep)<3)
-		{
-			if (!pin3_inUse)
-			{
-				DBG_OUT(PIN1_bm,0xff);
-				usb_send(currentStep);
-				DBG_OUT(PIN1_bm,0x00);
-			}
-			
-			pin3_inUse = 1;
-		}
-		else
-		{
-			pin3_inUse = 0;
-		}
-		
-		pin3_lastprobe_stamp = currentStamp;
-		pin3_lastprobe_step = currentStep;
-		
-		DBG_OUT(PIN2_bm,0x00);
+		if (tmp_controller_id != controller_id)
+			return;
 	}
 	
-	DBG_OUT(PIN3_bm,0x00);
+	uint8_t data[2];
+	data[0] = controller_id << 5;
+	data[1] = sensor_id;
+	
+	usb_send_packet(PACKET_TYPE_POSITION, data, 2);
+}
+
+uint8_t period_to_controller_id(uint16_t period)
+{
+	uint8_t result = ((period + MAX_PERIOD_OFFSET) >> 5) - 1;
+	
+	if (result > MAX_CONTROLLER_ID)
+		return 0xFF;
+	
+	uint8_t ideal_period = (result + 1) << 5;
+	int8_t period_offset = period - ideal_period;
+	int8_t tolerable_offset = (result + 1) << 1;
+	
+	if (period_offset > tolerable_offset || period_offset < -tolerable_offset)
+		return 0xFF;
+	
+	return result;
 }

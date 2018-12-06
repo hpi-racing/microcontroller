@@ -8,6 +8,10 @@
 	itemType*		g_p##queueName##Read = g_##queueName; \
 	static const unsigned char	g_uc##queueName##Length = queueLength; \
 	unsigned char	g_uc##queueName##NumberOfFreeEntries = queueLength; \
+	
+	
+#define BUFFER_FREEENTRIES(queueName) \
+	(g_uc##queueName##NumberOfFreeEntries)
 
 #define BUFFER_CANWRITE(queueName) \
 	(g_uc##queueName##NumberOfFreeEntries > 0)

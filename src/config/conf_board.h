@@ -20,7 +20,7 @@
  * Pufferdefinitionen *
  **********************/
 // Länge des Schreibpuffers der USB-Schnittstelle
-#define USB_TRANSMIT_BUFFER_LENGTH		16
+#define USB_TRANSMIT_BUFFER_LENGTH		64
 // Länge des Datenpuffers des Schienensensors
 #define LANE_BUFFER_LENGTH				16
 

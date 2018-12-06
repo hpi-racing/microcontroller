@@ -1,84 +1,81 @@
 #include "lane_sensor.h"
+#include "lane_sensor_isr.h"
+#include "read_access.h"
 #include "usb.h"
 #include "debug.h"
 
-unsigned char waitForUpcomingShort = 0;
-unsigned char idx;
-unsigned char currentBit;
-int sequence;
 
-/**
- * Initialisiert den Eingang für den Schienensensor (Port R Pin 0)
- */
-void lane_sensor_init (void)
+#include <asf.h>
+#include <string.h>
+
+inline uint16_t reverse12(uint16_t v);
+inline uint8_t reverse8(uint8_t v);
+
+void lane_sensor_init()
 {
-	// Interrupts für Flanken des Schienensignals
-	PORTR_INT0MASK = PIN0_bm;				// Interrupt 0 benutzen
-	PORTR_INTCTRL |= PORT_INT0LVL_MED_gc;	// Interrupt 0 für Signal der Schiene auf mittleres Level festlegen
-	
-	// Interrupts für das Ende des Datenpakets auf dem Schienensignal
-	TCC0_CTRLA = TC_CLKSEL_DIV64_gc;		// Vorteiler 64 einstellen (Systemtakt: 32 MHz -> Timerfrequenz: 500 kHz)
-	TCC0_CCA = 70;							// Interrupt löst bei diesem Counterwert aus
-	TCC0_INTCTRLB = TC_CCAINTLVL_OFF_gc;	// Interript erstmal dekativiert lassen
+	lane_sensor_init_isr();
 }
 
+void process_lane_sensor_queue()
+{
+	if (lane_sensor_packet.read_access != READ_ACCESS_READY)
+		return;
+	
+	lane_sensor_packet.read_access = READ_ACCESS_IN_PROGRESS;
+	uint8_t count = lane_sensor_packet.bit_count;
+	uint16_t sequence = lane_sensor_packet.bit_sequence;
+	lane_sensor_packet.read_access = READ_ACCESS_NOT_READY;
+	
+	if (count == 7)
+	{
+		// Umdrehen, damit das Aktivbit für Controller 0 auch das Bit 0 ist.
+		uint8_t payload = reverse8(sequence) >> 1;
+		usb_send_packet(PACKET_TYPE_CONTROLLER_ACTIVITY, &payload, sizeof(payload));
+	}
+	else if (count == 9)
+	{
+		uint8_t payload[2];
+		packet_type_t type = ((sequence >> 6) == 7) ? PACKET_TYPE_RACE_STATUS : PACKET_TYPE_CONTROLLER_STATE;
+		payload[0] = sequence >> 1;
+		payload[1] = sequence << 7;
 
-/**
- * Interrupt-Service-Routine für Flanken 
- */
-ISR (PORTR_INT0_vect)
-{	
-	DBG_OUT(PIN3_bm,0xff);
-	
-	int sensorCount = TCC0_CNT;
-	TCC0_CNT = 1;	// Counterwert für den Interrupt zum Erkennen des Datenpaketendes zurücksetzen
-		
-	// Start der Datenpakets
-	if (TCC0_INTCTRLB==TC_CCAINTLVL_OFF_gc)
-	{
-		sequence = 0;
-		idx = 0;
-		currentBit = 1;
-		TCC0_INTCTRLB = TC_CCAINTLVL_MED_gc; // Timerinterrupt zum Erkennen des Paketendes aktivieren
+		usb_send_packet(type, payload, sizeof(payload));
 	}
-	// Datenpaket läuft bereits
-	else
+	else if (count == 12)
 	{
-		// Dekodierung des Manchester-Codes:
-		//   einmal lang = Wert des Bits wird umgekehrt
-		//   zweimal kurz = gleiche Bit wie das davor
-		
-		if (sensorCount>35) // einmal lang
-		{
-			currentBit = (currentBit) ? 0 : 1;
-			sequence |= currentBit << idx++;
-		}
-		else if (waitForUpcomingShort) // zweites kurz
-		{
-			waitForUpcomingShort = false;
-		}
-		else // das erste kurz
-		{
-			waitForUpcomingShort = true; // danach auf ein zweites warten
-			sequence |= currentBit << idx++;
-		}
+		// Die Control Unit schickt Programmierdatenworte in LSB
+		// Reihenfolge. Für Einheitlichkeit wird die Bitsequenz deshalb
+		// umgekehrt bevor sie per USB verschickt wird.
+		sequence = reverse12(sequence);
+
+		uint8_t payload[2];
+		payload[0] = sequence >> 4;
+		payload[1] = sequence << 4;
+
+		usb_send_packet(PACKET_TYPE_TRACK_CONTROL, payload, sizeof(payload));
 	}
-	
-	DBG_OUT(PIN3_bm,0x00);
 }
 
-
-/**
- * Interrupt-Service-Routine für Ende des Datenpakets auf dem Schienensignal
- */
-ISR (TCC0_CCA_vect)
+uint16_t reverse12(uint16_t v)
 {
-	TCC0_INTCTRLB = TC_CCAINTLVL_OFF_gc; // Timerinterrupt deaktivieren
-	DBG_OUT(PIN3_bm,0xff);
-			
-	usb_send(idx | 0b10000000);
-	usb_send(sequence & 0b01111111);
-	usb_send((sequence >> 7) & 0b01111111);
+	// swap even and odd bits
+	v = ((v >> 1) & 0x0555) | ((v & 0x0555) << 1);
+	// swap consecutive pairs
+	v = ((v >> 2) & 0x0333) | ((v & 0x0333) << 2);
+	// swap first and last nibble
+	v = ((v >> 8) & 0x000F) | (v & 0x00F0) | ((v & 0x000F) << 8);
+	
+	return v;
+}
 
-	DBG_OUT(PIN3_bm,0x00);
+uint8_t reverse8(uint8_t v)
+{
+	// swap even and odd bits
+	v = ((v >> 1) & 0x55) | ((v & 0x55) << 1);
+	// swap consecutive pairs
+	v = ((v >> 2) & 0x33) | ((v & 0x33) << 2);
+	// swap first and last nibble
+	v = ((v >> 4) & 0x0F) | ((v & 0x0F) << 4);
+	
+	return v;
 }

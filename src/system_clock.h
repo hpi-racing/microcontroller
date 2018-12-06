@@ -3,8 +3,10 @@
 
 #include "asf.h"
 
+extern uint16_t real_time_clock_adjustment;
 
-// öffentliche Funktionen
-void system_clock_init (void);
+void system_clock_init(void);
+
+#define RTC_VALUE (RTC.CNT + real_time_clock_adjustment)
 
 #endif /* SYSTEM_CLOCK_H_ */

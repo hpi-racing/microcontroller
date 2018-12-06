@@ -1,10 +1,7 @@
 #ifndef POSITION_SENSOR_H_
 #define POSITION_SENSOR_H_
 
-#include <asf.h>
-
-
-void position_sensor_init (void);
-
+void position_sensor_init(void);
+void process_position_sensor_queue(void);
 
 #endif

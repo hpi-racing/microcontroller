@@ -2,8 +2,8 @@
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <PropertyGroup>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectVersion>6.1</ProjectVersion>
-    <ProjectGuid>{88d64d43-9764-4a68-841e-2df5cd5e20f4}</ProjectGuid>
+    <ProjectVersion>6.2</ProjectVersion>
+    <ProjectGuid>{7b0fbde9-e638-4915-ae07-b0ffc7a7e374}</ProjectGuid>
     <Name>$(MSBuildProjectName)</Name>
     <AssemblyName>$(MSBuildProjectName)</AssemblyName>
     <RootNamespace>$(MSBuildProjectName)</RootNamespace>
@@ -199,6 +199,12 @@
     <Compile Include="src\Interrupts.c">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\lane_sensor_isr.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\lane_sensor_isr.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\main.c">
       <SubType>compile</SubType>
     </Compile>
@@ -215,6 +221,18 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\buffer.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\packet_type.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\position_sensor_isr.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\position_sensor_isr.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\read_access.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\system_clock.c">

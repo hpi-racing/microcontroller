@@ -1,5 +1,7 @@
 #include "system_clock.h"
+//#include <rtc_driver.h>
 
+uint16_t real_time_clock_adjustment;
 
 void system_clock_init (void)
 {
@@ -33,4 +35,21 @@ void system_clock_init (void)
 
 	// Alle nicht benutzten Oszillatoren abschalten
 	OSC_CTRL &= (OSC_RC32MEN_bm | OSC_RC32KEN_bm);
+	
+	//RTC einschalten
+	
+	//CLKSYS_RTC_ClockSource_Enable(CLK_RTCSRC_ULP_gc);
+	
+	RTC.CTRL = 0b00000001;
+	CLK.RTCCTRL = 0b00000001;
+	RTC.INTCTRL |= RTC_OVFINTLVL0_bm;
+	
+	while ((RTC.STATUS & RTC_SYNCBUSY_bm) == RTC_SYNCBUSY_bm)
+		;
+
+	real_time_clock_adjustment = 0;
+}
+
+ISR(RTC_OVF_vect)
+{
 }

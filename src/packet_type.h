@@ -1,0 +1,13 @@
+#ifndef PACKET_TYPE_H_
+#define PACKET_TYPE_H_
+
+typedef enum packet_type_enum
+{
+	PACKET_TYPE_CONTROLLER_STATE = 0x00,
+	PACKET_TYPE_RACE_STATUS = 0x20,
+	PACKET_TYPE_TRACK_CONTROL = 0x40,
+	PACKET_TYPE_CONTROLLER_ACTIVITY = 0x60,
+	PACKET_TYPE_POSITION = 0x80,
+} packet_type_t;
+
+#endif /* PACKET_TYPE_H_ */
